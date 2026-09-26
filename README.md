@@ -76,6 +76,14 @@ After rebuilding the configured database or changing the target, use `npm run fr
 
 The frame manager at `/admin/frames` requires an authenticated user with the `ADMIN` role. See the Discord setup below for bootstrapping the first administrator, and `tools/frames/README.md` for the frame pipeline safety model.
 
+## Connections authoring
+
+Administrators prepare future Connections puzzles at `/admin/connections`. With
+`OPENROUTER_API_KEY` configured, the AI-assisted panel can arrange the curated catalogue into draft
+candidates, run a second-model critique, and show the estimated request cost. Choosing a candidate
+saves it only as a draft; review and editing remain required before approval. Replacing an existing
+draft requires an explicit confirmation and approved puzzles cannot be overwritten by the generator.
+
 ## Unlimited FrierenGuessr
 
 Generate a signing secret for anonymous game sessions and add it to `.env.local`:

@@ -13,75 +13,19 @@ import {
   canReturnConnectionsPuzzleToDraft,
   connectionsPuzzleDisplayState,
 } from "../domain/puzzle-policy";
-import {
-  normalizeConnectionsText,
-  validateConnectionsPuzzle,
-} from "../domain/puzzle";
+import { validateConnectionsPuzzle } from "../domain/puzzle";
 import type { ConnectionsPuzzle } from "../domain/types";
+import {
+  connectionsPuzzleWithAnswers as puzzleWithAnswers,
+  writeConnectionsPuzzleDraft,
+  type ConnectionsPuzzleDraftInput,
+} from "./draft-writer";
 
-export type ConnectionsPuzzleDraftInput = {
-  dateUtc: Date;
-  spoilerNote?: string | null;
-  groups: Array<{
-    position: number;
-    label: string;
-    explanation?: string | null;
-    tiles: string[];
-  }>;
-};
-
-const puzzleWithAnswers = {
-  groups: {
-    orderBy: { position: "asc" as const },
-    include: { tiles: { orderBy: { id: "asc" as const } } },
-  },
-  _count: { select: { attempts: true } },
-};
+export type { ConnectionsPuzzleDraftInput } from "./draft-writer";
 
 type StoredConnectionsPuzzle = Prisma.ConnectionsPuzzleGetPayload<{
   include: typeof puzzleWithAnswers;
 }>;
-
-function cleanText(value: string): string {
-  return value.trim().replace(/\s+/g, " ");
-}
-
-function cleanOptionalText(value?: string | null): string | null {
-  const cleaned = value?.trim();
-  return cleaned ? cleaned : null;
-}
-
-function validationPuzzle(
-  input: ConnectionsPuzzleDraftInput,
-): ConnectionsPuzzle {
-  return {
-    id: "draft",
-    spoilerNote: cleanOptionalText(input.spoilerNote),
-    groups: input.groups.map((group, groupIndex) => ({
-      id: `draft-group-${groupIndex}`,
-      position: group.position,
-      label: cleanText(group.label),
-      explanation: cleanOptionalText(group.explanation),
-      tiles: group.tiles.map((text, tileIndex) => ({
-        id: `draft-tile-${groupIndex}-${tileIndex}`,
-        text: cleanText(text),
-      })),
-    })),
-  };
-}
-
-function assertValidDraft(
-  input: ConnectionsPuzzleDraftInput,
-): ConnectionsPuzzle {
-  const puzzle = validationPuzzle(input);
-  const issues = validateConnectionsPuzzle(puzzle);
-  if (issues.length > 0) {
-    throw new Error(
-      issues.map((issue) => `${issue.path}: ${issue.message}`).join(" "),
-    );
-  }
-  return puzzle;
-}
 
 function storedPuzzleToDomain(
   puzzle: StoredConnectionsPuzzle,
@@ -114,73 +58,19 @@ export async function saveConnectionsPuzzleDraft(
   input: ConnectionsPuzzleDraftInput,
   now = new Date(),
 ) {
-  const dateUtc = startOfUtcDate(input.dateUtc);
-  const puzzle = assertValidDraft({ ...input, dateUtc });
-
   return getDb().$transaction(
-    async (database) => {
-      const existing = await database.connectionsPuzzle.findUnique({
-        where: { dateUtc },
-        include: puzzleWithAnswers,
-      });
-
-      if (
-        existing &&
-        !canEditConnectionsPuzzle(existing.dateUtc, existing.status, now)
-      ) {
-        throw new Error(
-          "Only future draft puzzles can be edited. Return an approved future puzzle to draft first.",
-        );
-      }
-      if (!existing && dateUtc <= startOfUtcDate(now)) {
-        throw new Error(
-          "Connections puzzles can only be created for future UTC dates.",
-        );
-      }
-
-      const stored = existing
-        ? await database.connectionsPuzzle.update({
-            where: { id: existing.id },
-            data: { spoilerNote: puzzle.spoilerNote },
-          })
-        : await database.connectionsPuzzle.create({
-            data: {
-              dateUtc,
-              spoilerNote: puzzle.spoilerNote,
-              status: DbConnectionsPuzzleStatus.DRAFT,
-            },
-          });
-
-      if (existing) {
-        await database.connectionsGroup.deleteMany({
-          where: { puzzleId: stored.id },
-        });
-      }
-
-      for (const group of puzzle.groups) {
-        await database.connectionsGroup.create({
-          data: {
-            puzzle: { connect: { id: stored.id } },
-            position: group.position,
-            label: group.label,
-            explanation: group.explanation,
-            tiles: {
-              create: group.tiles.map((tile) => ({
-                text: tile.text,
-                normalizedText: normalizeConnectionsText(tile.text),
-              })),
-            },
-          },
-        });
-      }
-
-      return database.connectionsPuzzle.findUniqueOrThrow({
-        where: { id: stored.id },
-        include: puzzleWithAnswers,
-      });
-    },
+    (database) => writeConnectionsPuzzleDraft(database, input, now),
     { isolationLevel: "Serializable" },
   );
+}
+
+export async function getConnectionsPuzzleStatusForDate(dateUtc: Date) {
+  return (
+    await getDb().connectionsPuzzle.findUnique({
+      where: { dateUtc: startOfUtcDate(dateUtc) },
+      select: { status: true },
+    })
+  )?.status;
 }
 
 export async function approveConnectionsPuzzle(

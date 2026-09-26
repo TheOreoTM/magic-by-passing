@@ -13,6 +13,7 @@ import {
   utcDateKey,
 } from "@/lib/utc-date";
 
+import { ConnectionsAiGeneratorPanel } from "./ai-generator-panel";
 import {
   approveConnectionsPuzzleAction,
   returnConnectionsPuzzleToDraftAction,
@@ -21,6 +22,7 @@ import {
 } from "./actions";
 
 export const metadata: Metadata = { title: "Connections Admin" };
+export const maxDuration = 120;
 
 function monthBounds(month: string) {
   const first = parseUtcDateKey(`${month}-01`);
@@ -214,6 +216,13 @@ export default async function ConnectionsAdminPage({
             })}
           </div>
         </section>
+
+        {canAuthor ? (
+          <ConnectionsAiGeneratorPanel
+            dateKey={selectedDateKey}
+            replacesExistingDraft={Boolean(selected)}
+          />
+        ) : null}
 
         <div className="mt-7 grid gap-7 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
           <section className="border-border bg-surface rounded-2xl border p-5 sm:p-6">
