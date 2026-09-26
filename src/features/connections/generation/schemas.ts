@@ -154,7 +154,13 @@ export function connectionsCriticBatchJsonSchema(input: {
                   tileIds: {
                     type: "array",
                     maxItems: 4,
-                    items: { type: "string", minLength: 1, maxLength: 80 },
+                    items: {
+                      type: "string",
+                      enum: Array.from(
+                        { length: 16 },
+                        (_, index) => `tile-${index + 1}`,
+                      ),
+                    },
                   },
                   explanation: {
                     type: "string",

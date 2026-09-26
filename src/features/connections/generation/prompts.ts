@@ -1,9 +1,67 @@
 import type { MaterializedConnectionsCandidate } from "./validation";
 import {
   CONNECTIONS_GENERATION_PROMPT_VERSION,
+  type ConnectionsCandidateReview,
   type ConnectionsCatalogCategory,
   type ConnectionsSpoilerBoundary,
 } from "./types";
+
+function criticTileAliases(candidate: MaterializedConnectionsCandidate) {
+  return new Map(
+    candidate.puzzle.groups
+      .flatMap((group) => group.tiles)
+      .map((tile, index) => [tile.id, `tile-${index + 1}`]),
+  );
+}
+
+export function restoreConnectionsCriticTileIds(
+  candidates: MaterializedConnectionsCandidate[],
+  reviews: ConnectionsCandidateReview[],
+): ConnectionsCandidateReview[] {
+  const aliasesByCandidate = new Map(
+    candidates.map((candidate) => {
+      const tilesById = new Map(
+        candidate.puzzle.groups
+          .flatMap((group) => group.tiles)
+          .map((tile) => [tile.id, tile]),
+      );
+      return [
+        candidate.source.id,
+        new Map(
+          [...criticTileAliases(candidate)].map(([tileId, alias]) => [
+            alias,
+            tilesById.get(tileId)!,
+          ]),
+        ),
+      ];
+    }),
+  );
+
+  return reviews.map((review) => {
+    const tileIdsByAlias = aliasesByCandidate.get(review.candidateId);
+    if (!tileIdsByAlias) return review;
+
+    return {
+      ...review,
+      issues: review.issues.map((issue) => ({
+        ...issue,
+        tileIds: issue.tileIds.map((alias) => {
+          const tile = tileIdsByAlias.get(alias);
+          if (!tile) {
+            throw new Error(
+              `The critic referenced unknown tile alias ${alias} for ${review.candidateId}.`,
+            );
+          }
+          return tile.id;
+        }),
+        explanation: issue.explanation.replace(
+          /\btile-(?:[1-9]|1[0-6])\b/g,
+          (alias) => tileIdsByAlias.get(alias)?.text ?? alias,
+        ),
+      })),
+    };
+  });
+}
 
 type PromptMessage = {
   role: "system" | "user";
@@ -70,8 +128,8 @@ export function buildConnectionsCriticMessages(
         "You are an adversarial editor reviewing Frieren Connections puzzle drafts.",
         "Try to defeat each board. Flag broad or misleading labels, obscure leaps, overly convincing red herrings, spelling/localization concerns, and any plausible alternate group.",
         "Review each candidate as an independent board. Never use tiles or categories from one candidate to criticize another candidate.",
-        "Tile and category IDs are normalized internal identifiers, not player-facing text. Do not flag missing accents, capitalization, or punctuation in an ID when the corresponding text is correct.",
-        "When reporting an issue, tileIds must contain only tile IDs from that same candidate. Never put category IDs or display text in tileIds.",
+        "Tile IDs are temporary opaque aliases used only to reference issues. Judge spelling and localization only from player-facing text.",
+        "When reporting an issue, tileIds must contain only tile aliases from that same candidate. Never put category IDs or display text in tileIds.",
         "The deterministic validator has already checked exact catalogue groups. Near matches are supplied because three tiles from another category may create a useful or unfair distraction.",
         "Do not add outside lore as fact. Base the review only on the supplied curated categories and source notes.",
         "A score of 8–10 should be reserved for boards that appear fair enough for human playtesting. Never claim a board is ready to publish without human review.",
@@ -81,23 +139,31 @@ export function buildConnectionsCriticMessages(
     {
       role: "user",
       content: JSON.stringify(
-        candidates.map((candidate) => ({
-          candidateId: candidate.source.id,
-          theme: candidate.source.theme,
-          constructionNotes: candidate.source.constructionNotes,
-          spoilerThrough: candidate.spoilerThrough,
-          groups: candidate.categories.map((category) => ({
-            id: category.id,
-            label: category.label,
-            explanation: category.explanation,
-            sourceNote: category.sourceNote,
-            tiles: category.tiles.map((tile) => ({
-              id: tile.id,
-              text: tile.text,
+        candidates.map((candidate) => {
+          const aliases = criticTileAliases(candidate);
+          return {
+            candidateId: candidate.source.id,
+            theme: candidate.source.theme,
+            constructionNotes: candidate.source.constructionNotes,
+            spoilerThrough: candidate.spoilerThrough,
+            groups: candidate.categories.map((category) => ({
+              id: category.id,
+              label: category.label,
+              explanation: category.explanation,
+              sourceNote: category.sourceNote,
+              tiles: category.tiles.map((tile) => ({
+                id: aliases.get(tile.id),
+                text: tile.text,
+              })),
             })),
-          })),
-          deterministicNearMatches: candidate.nearMatches,
-        })),
+            deterministicNearMatches: candidate.nearMatches.map((match) => ({
+              ...match,
+              matchingTileIds: match.matchingTileIds.map((tileId) =>
+                aliases.get(tileId),
+              ),
+            })),
+          };
+        }),
         null,
         2,
       ),

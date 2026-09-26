@@ -2,7 +2,8 @@
 
 This local tool asks one OpenRouter model to compose Connections boards from a curated catalogue,
 runs deterministic structural and alternate-group checks, and asks a second model to critique the
-surviving drafts. It prints drafts only. It does not write to PostgreSQL or approve a puzzle.
+surviving drafts. By default it only prints them; with `--save-date`, it can save one selected
+candidate to PostgreSQL as an unapproved draft. It never approves a puzzle.
 
 ## Setup
 
@@ -37,6 +38,16 @@ Limit the allowed anime material:
 npm run connections:generate -- --season 1 --episode 14
 ```
 
+Generate candidates, choose one interactively, and save it as a future draft:
+
+```bash
+npm run connections:generate -- --count 3 --theme "characters and magic" --save-date 2026-10-01
+```
+
+The save prompt shows each candidate's recommendation and fairness score. Saving requires
+`DATABASE_URL`, never approves the puzzle, and asks for an explicit `REPLACE` confirmation if the
+date already contains a draft. Review and edit the result in `/admin/connections` before approval.
+
 The catalogue lives in
 `src/features/connections/generation/catalog.ts`. Every category is an exact, human-authored group
 of four with a spoiler boundary and source note. Add or correct catalogue content before asking the
@@ -50,4 +61,5 @@ model to use it; never treat the model's memory as a canon source.
   complete catalogue category from the same sixteen tiles.
 - The critic is advisory. Every candidate still requires human canon, localization, ambiguity,
   spoiler, and mobile-layout review.
-- Generated drafts must be entered through the existing admin workflow and explicitly approved.
+- Generated drafts may be saved into the existing admin workflow, but must still be reviewed and
+  explicitly approved there.

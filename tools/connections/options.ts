@@ -1,9 +1,12 @@
 import { parseArgs } from "node:util";
 
+import { parseUtcDateKey } from "../../src/lib/utc-date";
+
 export type ConnectionsGeneratorOptions = {
   candidateCount: number;
   maximumSpoiler: { season: number; episode: number };
   theme: string;
+  saveDate?: string;
 };
 
 function positiveInteger(value: string, name: string): number {
@@ -26,6 +29,7 @@ export function parseConnectionsGeneratorOptions(
       season: { type: "string", default: "1" },
       episode: { type: "string", default: "28" },
       theme: { type: "string", default: "mixed" },
+      "save-date": { type: "string" },
     },
   });
 
@@ -35,6 +39,9 @@ export function parseConnectionsGeneratorOptions(
   const theme = values.theme.trim();
   if (!theme) throw new Error("--theme cannot be empty.");
 
+  const saveDate = values["save-date"]?.trim();
+  if (saveDate) parseUtcDateKey(saveDate);
+
   return {
     candidateCount,
     maximumSpoiler: {
@@ -42,5 +49,6 @@ export function parseConnectionsGeneratorOptions(
       episode: positiveInteger(values.episode, "--episode"),
     },
     theme,
+    ...(saveDate ? { saveDate } : {}),
   };
 }

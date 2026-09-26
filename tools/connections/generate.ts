@@ -3,6 +3,7 @@ import { connectionsGenerationCatalog } from "../../src/features/connections/gen
 import {
   buildConnectionsCriticMessages,
   buildConnectionsGeneratorMessages,
+  restoreConnectionsCriticTileIds,
 } from "../../src/features/connections/generation/prompts";
 import {
   connectionsCriticBatchJsonSchema,
@@ -17,8 +18,10 @@ import {
   validateConnectionsGenerationCatalog,
   type MaterializedConnectionsCandidate,
 } from "../../src/features/connections/generation/validation";
+import { parseUtcDateKey, startOfUtcDate } from "../../src/lib/utc-date";
 import { requestOpenRouterStructuredOutput } from "./openrouter";
 import { parseConnectionsGeneratorOptions } from "./options";
+import { promptToSaveConnectionsDraft } from "./save-draft";
 
 const DEFAULT_GENERATOR_MODEL = "google/gemini-3.1-flash-lite";
 const DEFAULT_CRITIC_MODEL = "openai/gpt-5-mini";
@@ -153,6 +156,12 @@ function printCandidate(
 
 async function main(): Promise<void> {
   const options = parseConnectionsGeneratorOptions(process.argv.slice(2));
+  if (
+    options.saveDate &&
+    parseUtcDateKey(options.saveDate) <= startOfUtcDate(new Date())
+  ) {
+    throw new Error("--save-date must be a future UTC date.");
+  }
   const apiKey = process.env.OPENROUTER_API_KEY?.trim();
   if (!apiKey) {
     throw new Error(
@@ -253,18 +262,30 @@ async function main(): Promise<void> {
     maxCompletionTokens: 8_000,
   });
   assertCompleteReviews(validCandidates, critiqued.data.reviews);
+  const reviews = restoreConnectionsCriticTileIds(
+    validCandidates,
+    critiqued.data.reviews,
+  );
   console.log(`Critic usage: ${usageLine(critiqued)}`);
 
   const reviewsByCandidate = new Map(
-    critiqued.data.reviews.map((review) => [review.candidateId, review]),
+    reviews.map((review) => [review.candidateId, review]),
   );
   for (const candidate of validCandidates) {
     printCandidate(candidate, reviewsByCandidate.get(candidate.source.id)!);
   }
 
   console.log(
-    "\nThese are untrusted authoring drafts. Canon, localization, ambiguity, spoiler scope, and mobile layout still require human review before saving a Daily.",
+    "\nThese are untrusted authoring drafts. Canon, localization, ambiguity, spoiler scope, and mobile layout still require human review before approving a Connections puzzle.",
   );
+
+  if (options.saveDate) {
+    await promptToSaveConnectionsDraft({
+      dateKey: options.saveDate,
+      candidates: validCandidates,
+      reviewsByCandidate,
+    });
+  }
 }
 
 main().catch((error: unknown) => {
