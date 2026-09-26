@@ -4,8 +4,11 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
+import { connectionsGenerationCatalog } from "@/features/connections/generation/catalog";
+import { evaluateGeneratedConnectionsCandidate } from "@/features/connections/generation/validation";
 import {
   approveConnectionsPuzzle,
+  getConnectionsPuzzleStatusForDate,
   returnConnectionsPuzzleToDraft,
   saveConnectionsPuzzleDraft,
   voidConnectionsPuzzle,
@@ -86,6 +89,67 @@ export async function saveConnectionsPuzzleAction(formData: FormData) {
       dateUtc: parseUtcDateKey(input.date),
       spoilerNote: input.spoilerNote,
       groups: input.groups,
+    });
+  } catch (error) {
+    notice = errorNotice(error);
+  }
+
+  finish(date, notice);
+}
+
+export async function saveGeneratedConnectionsCandidateAction(
+  formData: FormData,
+) {
+  await requireAdmin("/admin/connections");
+  const date = dateContext(formData);
+  let notice = "Generated candidate saved as a draft.";
+
+  try {
+    const input = z
+      .object({
+        date: dateKeySchema,
+        categoryIds: z.array(z.string().min(1).max(80)).length(4),
+        confirmReplace: z.boolean(),
+      })
+      .parse({
+        date: formData.get("date"),
+        categoryIds: formData.getAll("categoryId"),
+        confirmReplace: formData.get("confirmReplace") === "yes",
+      });
+    const dateUtc = parseUtcDateKey(input.date);
+    const existingStatus = await getConnectionsPuzzleStatusForDate(dateUtc);
+    if (existingStatus && !input.confirmReplace) {
+      throw new Error(
+        "Confirm that the generated candidate may replace the existing draft.",
+      );
+    }
+
+    const evaluation = evaluateGeneratedConnectionsCandidate(
+      {
+        id: "admin-ai-selection",
+        theme: "Admin AI selection",
+        categoryIds: input.categoryIds,
+        constructionNotes: "Selected through the admin generator.",
+      },
+      connectionsGenerationCatalog,
+      { season: 999, episode: 999 },
+    );
+    if (evaluation.issues.length > 0 || !evaluation.materialized) {
+      throw new Error(
+        evaluation.issues.map((issue) => issue.message).join(" ") ||
+          "The generated candidate is no longer valid.",
+      );
+    }
+
+    await saveConnectionsPuzzleDraft({
+      dateUtc,
+      spoilerNote: evaluation.materialized.puzzle.spoilerNote,
+      groups: evaluation.materialized.puzzle.groups.map((group) => ({
+        position: group.position,
+        label: group.label,
+        explanation: group.explanation,
+        tiles: group.tiles.map((tile) => tile.text),
+      })),
     });
   } catch (error) {
     notice = errorNotice(error);

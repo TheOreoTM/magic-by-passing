@@ -64,6 +64,15 @@ export async function saveConnectionsPuzzleDraft(
   );
 }
 
+export async function getConnectionsPuzzleStatusForDate(dateUtc: Date) {
+  return (
+    await getDb().connectionsPuzzle.findUnique({
+      where: { dateUtc: startOfUtcDate(dateUtc) },
+      select: { status: true },
+    })
+  )?.status;
+}
+
 export async function approveConnectionsPuzzle(
   puzzleId: string,
   now = new Date(),
