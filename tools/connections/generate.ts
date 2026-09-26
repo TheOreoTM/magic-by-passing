@@ -249,7 +249,8 @@ async function main(): Promise<void> {
     }),
     outputSchema: connectionsCriticBatchSchema,
     messages: buildConnectionsCriticMessages(validCandidates),
-    maxCompletionTokens: 4_000,
+    reasoningEffort: "low",
+    maxCompletionTokens: 8_000,
   });
   assertCompleteReviews(validCandidates, critiqued.data.reviews);
   console.log(`Critic usage: ${usageLine(critiqued)}`);

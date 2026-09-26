@@ -13,6 +13,7 @@ describe("OpenRouter structured output client", () => {
       });
       expect(body.response_format.json_schema.strict).toBe(true);
       expect(body.temperature).toBe(0);
+      expect(body.reasoning).toEqual({ effort: "low" });
 
       return new Response(
         JSON.stringify({
@@ -37,6 +38,7 @@ describe("OpenRouter structured output client", () => {
       outputSchema: z.object({ answer: z.number() }).strict(),
       messages: [{ role: "user", content: "Question" }],
       temperature: 0,
+      reasoningEffort: "low",
       maxCompletionTokens: 100,
       fetchImplementation,
     });
@@ -46,6 +48,36 @@ describe("OpenRouter structured output client", () => {
       servedModel: "example/model",
       usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
     });
+  });
+
+  it("reports when a model reaches its output limit before returning JSON", async () => {
+    const fetchImplementation = vi.fn(async () =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            choices: [
+              { finish_reason: "length", message: { content: "" } },
+            ],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      ),
+    ) as typeof fetch;
+
+    await expect(
+      requestOpenRouterStructuredOutput({
+        apiKey: "test-key",
+        model: "example/reasoning-model",
+        schemaName: "answer",
+        jsonSchema: {},
+        outputSchema: z.object({ answer: z.number() }),
+        messages: [{ role: "user", content: "Question" }],
+        maxCompletionTokens: 100,
+        fetchImplementation,
+      }),
+    ).rejects.toThrow(
+      "OpenRouter returned no structured output (finish reason: length).",
+    );
   });
 
   it("omits temperature for models that do not support it", async () => {

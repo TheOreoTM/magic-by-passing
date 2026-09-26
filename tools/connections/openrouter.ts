@@ -13,6 +13,7 @@ type StructuredRequest<T> = {
   outputSchema: z.ZodType<T>;
   messages: OpenRouterMessage[];
   temperature?: number;
+  reasoningEffort?: "low" | "medium" | "high";
   maxCompletionTokens: number;
   fetchImplementation?: typeof fetch;
 };
@@ -22,7 +23,11 @@ const openRouterResponseSchema = z.object({
   choices: z
     .array(
       z.object({
-        message: z.object({ content: z.string() }),
+        finish_reason: z.string().nullable().optional(),
+        message: z.object({
+          content: z.string().nullable(),
+          refusal: z.string().nullable().optional(),
+        }),
       }),
     )
     .min(1),
@@ -67,6 +72,9 @@ export async function requestOpenRouterStructuredOutput<T>(
         ...(request.temperature === undefined
           ? {}
           : { temperature: request.temperature }),
+        ...(request.reasoningEffort === undefined
+          ? {}
+          : { reasoning: { effort: request.reasoningEffort } }),
         max_completion_tokens: request.maxCompletionTokens,
         response_format: {
           type: "json_schema",
@@ -93,11 +101,22 @@ export async function requestOpenRouterStructuredOutput<T>(
   }
 
   const envelope = openRouterResponseSchema.parse(await response.json());
+  const choice = envelope.choices[0];
+  const content = choice.message.content;
+  if (!content) {
+    const reason = choice.message.refusal
+      ? `refusal: ${choice.message.refusal}`
+      : `finish reason: ${choice.finish_reason ?? "unknown"}`;
+    throw new Error(`OpenRouter returned no structured output (${reason}).`);
+  }
+
   let decoded: unknown;
   try {
-    decoded = JSON.parse(envelope.choices[0].message.content);
+    decoded = JSON.parse(content);
   } catch {
-    throw new Error("OpenRouter returned structured output that was not JSON.");
+    throw new Error(
+      `OpenRouter returned invalid structured JSON (finish reason: ${choice.finish_reason ?? "unknown"}).`,
+    );
   }
 
   return {
