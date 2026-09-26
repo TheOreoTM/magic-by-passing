@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "connections:generate": "node --env-file-if-exists=.env.local --import tsx tools/connections/generate.ts",
     "curator": "node --env-file-if-exists=.env.local --import tsx tools/curator/src/server.ts",
     "frames:push": "node --env-file-if-exists=.env.local --import tsx tools/frames/push.ts",
     "env:check": "node --env-file-if-exists=.env.local --import tsx tools/check-production-env.ts",
