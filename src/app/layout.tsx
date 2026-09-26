@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { Suspense } from "react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
 import { SiteFooter } from "@/components/shell/site-footer";
@@ -8,6 +7,8 @@ import { SiteHeader } from "@/components/shell/site-header";
 import { resolveSiteBrand } from "@/lib/site-brand";
 
 import "./globals.css";
+
+export const revalidate = 3600;
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -53,16 +54,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
-        <Suspense
-          fallback={
-            <div
-              className="border-border bg-background h-16 border-b"
-              aria-hidden="true"
-            />
-          }
-        >
-          <SiteHeader />
-        </Suspense>
+        <SiteHeader />
         {children}
         <SiteFooter />
         <SpeedInsights />

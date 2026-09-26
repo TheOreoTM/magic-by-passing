@@ -19,6 +19,8 @@ export const metadata: Metadata = {
     "Find four groups of four in the daily Frieren Connections puzzle.",
 };
 
+export const revalidate = 60;
+
 export default async function ConnectionsPage() {
   const puzzle = await getCurrentConnectionsPuzzle();
 

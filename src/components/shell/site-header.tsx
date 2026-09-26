@@ -1,14 +1,11 @@
 import Link from "next/link";
 
-import { auth, signIn, signOut } from "@/auth";
-import { SubmitButton } from "@/components/ui/submit-button";
-import { UserRole } from "@/generated/prisma/client";
 import { resolveSiteBrand } from "@/lib/site-brand";
 
+import { AccountControls } from "./account-controls";
 import { SiteMark } from "./site-mark";
 
-export async function SiteHeader() {
-  const session = await auth();
+export function SiteHeader() {
   const brand = resolveSiteBrand();
 
   return (
@@ -46,82 +43,7 @@ export async function SiteHeader() {
           >
             Connections
           </Link>
-          {session?.user ? (
-            <>
-              {session.user.role === UserRole.ADMIN ? (
-                <Link
-                  href="/admin/frames"
-                  className="text-muted hover:text-foreground px-2 py-2 font-medium transition sm:px-3"
-                >
-                  Admin
-                </Link>
-              ) : null}
-              <Link
-                href={
-                  session.user.username
-                    ? `/user/${session.user.username}`
-                    : "/onboarding"
-                }
-                aria-label="View your profile"
-                className="flex min-w-0 items-center gap-2 px-2 py-1 transition hover:opacity-70"
-              >
-                {session.user.image ? (
-                  // The same-origin endpoint prevents the Discord account ID in the CDN URL from reaching the browser.
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={session.user.image}
-                    alt=""
-                    width={28}
-                    height={28}
-                    className="bg-border size-7 rounded-full object-cover"
-                  />
-                ) : null}
-                <span className="hidden font-medium min-[390px]:inline sm:hidden">
-                  Profile
-                </span>
-                <span className="hidden max-w-40 truncate font-medium sm:block">
-                  {session.user.displayName ??
-                    session.user.name ??
-                    session.user.username}
-                </span>
-              </Link>
-              {!session.user.onboardedAt ? (
-                <Link
-                  href="/onboarding"
-                  className="border-gold/50 text-foreground border px-3 py-2 font-semibold"
-                >
-                  Finish setup
-                </Link>
-              ) : null}
-              <form
-                action={async () => {
-                  "use server";
-                  await signOut({ redirectTo: "/" });
-                }}
-              >
-                <SubmitButton
-                  pendingLabel="Signing out…"
-                  className="text-muted hover:text-foreground px-2 py-2 font-semibold transition sm:px-3"
-                >
-                  Sign out
-                </SubmitButton>
-              </form>
-            </>
-          ) : (
-            <form
-              action={async () => {
-                "use server";
-                await signIn("discord", { redirectTo: "/guessr" });
-              }}
-            >
-              <SubmitButton
-                pendingLabel="Signing in…"
-                className="bg-foreground text-background px-3.5 py-2 font-semibold transition hover:opacity-80"
-              >
-                Sign in with Discord
-              </SubmitButton>
-            </form>
-          )}
+          <AccountControls />
         </nav>
       </div>
     </header>
