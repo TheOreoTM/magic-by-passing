@@ -12,6 +12,7 @@ describe("OpenRouter structured output client", () => {
         data_collection: "deny",
       });
       expect(body.response_format.json_schema.strict).toBe(true);
+      expect(body.temperature).toBe(0);
 
       return new Response(
         JSON.stringify({
@@ -44,6 +45,31 @@ describe("OpenRouter structured output client", () => {
       data: { answer: 42 },
       servedModel: "example/model",
       usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+    });
+  });
+
+  it("omits temperature for models that do not support it", async () => {
+    const fetchImplementation = vi.fn(async (_url, init) => {
+      const body = JSON.parse(String(init?.body));
+      expect(body).not.toHaveProperty("temperature");
+
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: JSON.stringify({ answer: 42 }) } }],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }) as typeof fetch;
+
+    await requestOpenRouterStructuredOutput({
+      apiKey: "test-key",
+      model: "example/reasoning-model",
+      schemaName: "answer",
+      jsonSchema: {},
+      outputSchema: z.object({ answer: z.number() }),
+      messages: [{ role: "user", content: "Question" }],
+      maxCompletionTokens: 100,
+      fetchImplementation,
     });
   });
 

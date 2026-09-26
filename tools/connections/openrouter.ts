@@ -12,7 +12,7 @@ type StructuredRequest<T> = {
   jsonSchema: object;
   outputSchema: z.ZodType<T>;
   messages: OpenRouterMessage[];
-  temperature: number;
+  temperature?: number;
   maxCompletionTokens: number;
   fetchImplementation?: typeof fetch;
 };
@@ -64,7 +64,9 @@ export async function requestOpenRouterStructuredOutput<T>(
       body: JSON.stringify({
         model: request.model,
         messages: request.messages,
-        temperature: request.temperature,
+        ...(request.temperature === undefined
+          ? {}
+          : { temperature: request.temperature }),
         max_completion_tokens: request.maxCompletionTokens,
         response_format: {
           type: "json_schema",

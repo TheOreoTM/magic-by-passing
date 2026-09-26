@@ -249,7 +249,6 @@ async function main(): Promise<void> {
     }),
     outputSchema: connectionsCriticBatchSchema,
     messages: buildConnectionsCriticMessages(validCandidates),
-    temperature: 0.2,
     maxCompletionTokens: 4_000,
   });
   assertCompleteReviews(validCandidates, critiqued.data.reviews);
